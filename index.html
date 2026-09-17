@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>液态远心镜头 · 景深计算器</title>
+<style>
+  :root {
+    --bg-primary: #0a0e1a;
+    --bg-secondary: #111827;
+    --bg-card: #1a2236;
+    --bg-input: #0f1626;
+    --border: #2a3550;
+    --border-focus: #00d4ff;
+    --text-primary: #e8edf5;
+    --text-secondary: #8b95a8;
+    --text-muted: #5a6478;
+    --accent: #00d4ff;
+    --accent-glow: rgba(0, 212, 255, 0.15);
+    --accent2: #7c5cff;
+    --success: #00e676;
+    --warning: #ffb300;
+    --danger: #ff5252;
+    --radius: 12px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', 'Microsoft YaHei', -apple-system, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    background-image:
+      radial-gradient(ellipse at 20% 0%, rgba(0, 212, 255, 0.06) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 100%, rgba(124, 92, 255, 0.06) 0%, transparent 50%);
+  }
+
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    margin-bottom: 36px;
+  }
+  .header .badge {
+    display: inline-block;
+    padding: 4px 14px;
+    background: var(--accent-glow);
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    border-radius: 20px;
+    font-size: 12px;
+    color: var(--accent);
+    letter-spacing: 2px;
+    margin-bottom: 14px;
+  }
+  .header h1 {
+    font-size: 30px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #fff 0%, var(--accent) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 8px;
+  }
+  .header p {
+    color: var(--text-secondary);
+    font-size: 14px;
+  }
+
+  /* Formula bar */
+  .formula-bar {
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.08), rgba(124, 92, 255, 0.08));
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 28px;
+    margin-bottom: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .formula-bar .formula {
+    font-size: 22px;
+    font-family: 'Cambria Math', 'Times New Roman', serif;
+    font-style: italic;
+    color: var(--accent);
+    letter-spacing: 1px;
+  }
+  .formula-bar .formula .num { color: var(--text-primary); }
+  .formula-bar .desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.8;
+  }
+  .formula-bar .desc span { color: var(--accent); font-weight: 600; }
+
+  /* Main grid */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  @media (max-width: 768px) {
+    .main-grid { grid-template-columns: 1fr; }
+  }
+
+  /* Card */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .card-header {
+    padding: 16px 22px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .card-header .icon {
+    width: 28px; height: 28px;
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    background: var(--accent-glow);
+    color: var(--accent);
+  }
+  .card-header h2 {
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .card-body { padding: 22px; }
+
+  /* Input group */
+  .input-group {
+    margin-bottom: 20px;
+  }
+  .input-group:last-child { margin-bottom: 0; }
+  .input-group label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+  }
+  .input-group label .symbol {
+    font-family: 'Cambria Math', serif;
+    font-style: italic;
+    color: var(--accent);
+    font-size: 15px;
+  }
+  .input-group label .unit {
+    font-size: 11px;
+    color: var(--text-muted);
+    background: var(--bg-input);
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+  .input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .input-wrap input {
+    width: 100%;
+    padding: 11px 14px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 15px;
+    font-family: inherit;
+    transition: all 0.2s;
+    outline: none;
+  }
+  .input-wrap input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+  }
+  .input-wrap input::placeholder { color: var(--text-muted); }
+  .input-wrap .suffix {
+    position: absolute;
+    right: 14px;
+    font-size: 12px;
+    color: var(--text-muted);
+    pointer-events: none;
+  }
+
+  /* Mode toggle */
+  .mode-toggle {
+    display: flex;
+    background: var(--bg-input);
+    border-radius: 8px;
+    padding: 3px;
+    margin-bottom: 20px;
+  }
+  .mode-toggle button {
+    flex: 1;
+    padding: 8px 12px;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+  .mode-toggle button.active {
+    background: var(--accent);
+    color: var(--bg-primary);
+    font-weight: 600;
+  }
+
+  /* Derived values */
+  .derived-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: var(--bg-input);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    border: 1px solid transparent;
+    transition: border-color 0.2s;
+  }
+  .derived-row:hover { border-color: var(--border); }
+  .derived-row .label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .derived-row .label .sym {
+    font-family: 'Cambria Math', serif;
+    font-style: italic;
+    color: var(--accent2);
+    font-size: 15px;
+  }
+  .derived-row .value {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+  .derived-row .value .u {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 400;
+    margin-left: 4px;
+  }
+
+  /* Result display */
+  .result-hero {
+    text-align: center;
+    padding: 28px 20px;
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(124, 92, 255, 0.1));
+    border-radius: var(--radius);
+    border: 1px solid rgba(0, 212, 255, 0.2);
+    margin-bottom: 20px;
+  }
+  .result-hero .label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+  }
+  .result-hero .value {
+    font-size: 48px;
+    font-weight: 700;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+    text-shadow: 0 0 30px rgba(0, 212, 255, 0.3);
+  }
+  .result-hero .value .u {
+    font-size: 18px;
+    color: var(--text-secondary);
+    font-weight: 400;
+    margin-left: 6px;
+  }
+  .result-hero .sub {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 8px;
+  }
+
+  /* Depth range bar */
+  .depth-bar-wrap {
+    margin-bottom: 20px;
+  }
+  .depth-bar-wrap .bar-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+  .depth-bar {
+    height: 8px;
+    background: var(--bg-input);
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+  .depth-bar .fill {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent2), var(--accent));
+    border-radius: 4px;
+    transition: width 0.3s;
+  }
+  .depth-bar .center-line {
+    position: absolute;
+    left: 50%;
+    top: -2px;
+    width: 2px;
+    height: 12px;
+    background: var(--text-primary);
+    border-radius: 1px;
+  }
+
+  /* Detail breakdown */
+  .breakdown {
+    background: var(--bg-input);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .breakdown-toggle {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+    transition: color 0.2s;
+  }
+  .breakdown-toggle:hover { color: var(--accent); }
+  .breakdown-toggle .arrow {
+    transition: transform 0.3s;
+    font-size: 10px;
+  }
+  .breakdown.open .breakdown-toggle .arrow { transform: rotate(180deg); }
+  .breakdown-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease, margin-top 0.3s ease;
+  }
+  .breakdown.open .breakdown-body {
+    max-height: 300px;
+    margin-top: 12px;
+  }
+  .breakdown .step {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 0;
+    border-bottom: 1px solid rgba(42, 53, 80, 0.5);
+    font-size: 13px;
+  }
+  .breakdown .step:last-child { border-bottom: none; }
+  .breakdown .step .expr {
+    color: var(--text-secondary);
+    font-family: 'Cambria Math', serif;
+  }
+  .breakdown .step .result {
+    color: var(--text-primary);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Preset buttons */
+  .preset-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+  }
+  .preset-btn {
+    padding: 6px 12px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+  .preset-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    margin-top: 32px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.8;
+  }
+  .footer .note {
+    color: var(--warning);
+    font-size: 11px;
+  }
+
+  /* Warning banner */
+  .warn-banner {
+    display: none;
+    padding: 10px 16px;
+    background: rgba(255, 179, 0, 0.1);
+    border: 1px solid rgba(255, 179, 0, 0.3);
+    border-radius: 8px;
+    color: var(--warning);
+    font-size: 12px;
+    margin-bottom: 16px;
+    align-items: center;
+    gap: 8px;
+  }
+  .warn-banner.show { display: flex; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="badge">LIQUID TELECENTRIC LENS</div>
+    <h1>液态远心镜头 · 景深计算器</h1>
+    <p>基于物方容许弥散圆与实效F数的景深精确求解</p>
+  </div>
+
+  <!-- Formula -->
+  <div class="formula-bar">
+    <div class="formula">
+      DOF = <span class="num">2</span> × δ × F<sub>#</sub> / M<sup>2</sup>
+    </div>
+    <div class="desc">
+      δ = 像素尺寸 / M　|　F<sub>#</sub> = M / (2 × NA)<br>
+      <span>DOF</span> 景深(mm) · <span>δ</span> 容许弥散圆(mm) · <span>F#</span> 实效F数 · <span>M</span> 放大倍率 · <span>NA</span> 物方数值孔径
+    </div>
+  </div>
+
+  <div class="main-grid">
+
+    <!-- Input Card -->
+    <div class="card">
+      <div class="card-header">
+        <div class="icon">⚙</div>
+        <h2>产品参数输入</h2>
+      </div>
+      <div class="card-body">
+
+        <div class="input-group">
+          <label>
+            <span>镜头光学放大倍率 <span class="symbol">M</span></span>
+            <span class="unit">×</span>
+          </label>
+          <div class="input-wrap">
+            <input type="number" id="magnification" value="0.5" step="0.01" min="0.001" placeholder="例如 0.5">
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label>
+            <span>相机像素尺寸 <span class="symbol">p</span></span>
+            <span class="unit">μm</span>
+          </label>
+          <div class="input-wrap">
+            <input type="number" id="pixelSize" value="3.45" step="0.01" min="0.1" placeholder="例如 3.45">
+          </div>
+        </div>
+
+        <!-- F# / NA mode toggle -->
+        <div class="mode-toggle">
+          <button class="active" data-mode="fnumber" onclick="setMode('fnumber')">实效F数 F#</button>
+          <button data-mode="na" onclick="setMode('na')">物方数值孔径 NA</button>
+        </div>
+
+        <div class="input-group" id="fnumberGroup">
+          <label>
+            <span>镜头实时实效F数 <span class="symbol">F#</span></span>
+            <span class="unit">—</span>
+          </label>
+          <div class="input-wrap">
+            <input type="number" id="fnumber" value="8" step="0.1" min="0.1" placeholder="例如 8">
+          </div>
+        </div>
+
+        <div class="input-group" id="naGroup" style="display:none;">
+          <label>
+            <span>物方数值孔径 <span class="symbol">NA</span></span>
+            <span class="unit">—</span>
+          </label>
+          <div class="input-wrap">
+            <input type="number" id="na" value="0.03" step="0.001" min="0.001" placeholder="例如 0.03">
+          </div>
+        </div>
+
+        <div class="warn-banner" id="warnBanner">
+          <span>⚠</span>
+          <span id="warnText">请输入有效的参数值</span>
+        </div>
+
+        <!-- Presets -->
+        <div class="preset-row">
+          <button class="preset-btn" onclick="loadPreset('vs-tch4')">VS-TCH4-65 参考</button>
+          <button class="preset-btn" onclick="loadPreset('highmag')">高倍率 1×</button>
+          <button class="preset-btn" onclick="loadPreset('lowmag')">低倍率 0.1×</button>
+          <button class="preset-btn" onclick="resetAll()">重置</button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Result Card -->
+    <div class="card">
+      <div class="card-header">
+        <div class="icon">📊</div>
+        <h2>计算结果</h2>
+      </div>
+      <div class="card-body">
+
+        <!-- Derived intermediate values -->
+        <div class="derived-row">
+          <div class="label"><span class="sym">δ</span> 物方容许弥散圆</div>
+          <div class="value"><span id="deltaVal">—</span><span class="u">mm</span></div>
+        </div>
+        <div class="derived-row">
+          <div class="label"><span class="sym">F#</span> 实效F数 <span id="fnumberSource" style="font-size:10px;color:var(--text-muted);"></span></div>
+          <div class="value"><span id="fnumberVal">—</span><span class="u">—</span></div>
+        </div>
+
+        <!-- Main result -->
+        <div class="result-hero" style="margin-top:20px;">
+          <div class="label">设 备 真 实 有 效 景 深 · DOF</div>
+          <div class="value"><span id="dofVal">—</span><span class="u">mm</span></div>
+          <div class="sub" id="dofSub">= 2 × δ × F# / M²</div>
+        </div>
+
+        <!-- Depth visualization -->
+        <div class="depth-bar-wrap">
+          <div class="bar-label">
+            <span>近景深边界 −DOF/2</span>
+            <span>对焦面</span>
+            <span>远景深边界 +DOF/2</span>
+          </div>
+          <div class="depth-bar">
+            <div class="fill" id="depthFill" style="width:60%;"></div>
+            <div class="center-line"></div>
+          </div>
+          <div class="bar-label" style="margin-top:6px;">
+            <span id="nearLimit">—</span>
+            <span></span>
+            <span id="farLimit">—</span>
+          </div>
+        </div>
+
+        <!-- Breakdown -->
+        <div class="breakdown" id="breakdown">
+          <div class="breakdown-toggle" onclick="toggleBreakdown()">
+            <span>计算过程明细</span>
+            <span class="arrow">▼</span>
+          </div>
+          <div class="breakdown-body">
+            <div class="step">
+              <span class="expr">δ = p / M</span>
+              <span class="result" id="stepDelta">—</span>
+            </div>
+            <div class="step">
+              <span class="expr" id="stepFExpr">F# = 直接输入</span>
+              <span class="result" id="stepF">—</span>
+            </div>
+            <div class="step">
+              <span class="expr">DOF = 2 × δ × F# / M²</span>
+              <span class="result" id="stepDof">—</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <p>液态远心镜头景深计算工具 · 纯本地运行，无需联网 · 数据不上传</p>
+    <p class="note">※ 计算结果基于几何光学近似，实际景深受镜头像差、波长、对焦精度等因素影响，仅供工程参考</p>
+  </div>
+
+</div>
+
+<script>
+function toggleBreakdown() {
+  document.getElementById('breakdown').classList.toggle('open');
+}
+
+let currentMode = 'fnumber';
+
+function setMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('.mode-toggle button').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mode === mode);
+  });
+  document.getElementById('fnumberGroup').style.display = mode === 'fnumber' ? '' : 'none';
+  document.getElementById('naGroup').style.display = mode === 'na' ? '' : 'none';
+  calculate();
+}
+
+function showWarning(msg) {
+  const banner = document.getElementById('warnBanner');
+  document.getElementById('warnText').textContent = msg;
+  banner.classList.add('show');
+}
+function hideWarning() {
+  document.getElementById('warnBanner').classList.remove('show');
+}
+
+function fmt(num, decimals) {
+  if (!isFinite(num)) return '—';
+  if (decimals !== undefined) return num.toFixed(decimals);
+  const abs = Math.abs(num);
+  if (abs >= 100) return num.toFixed(2);
+  if (abs >= 1) return num.toFixed(4);
+  if (abs >= 0.01) return num.toFixed(5);
+  if (abs >= 0.001) return num.toFixed(6);
+  return num.toFixed(8);
+}
+
+function calculate() {
+  const M = parseFloat(document.getElementById('magnification').value);
+  const p_um = parseFloat(document.getElementById('pixelSize').value); // μm
+  const fnumberInput = parseFloat(document.getElementById('fnumber').value);
+  const naInput = parseFloat(document.getElementById('na').value);
+
+  // Validation
+  if (!M || M <= 0) { showWarning('放大倍率 M 必须大于 0'); clearResults(); return; }
+  if (!p_um || p_um <= 0) { showWarning('像素尺寸必须大于 0'); clearResults(); return; }
+
+  let F;
+  if (currentMode === 'fnumber') {
+    if (!fnumberInput || fnumberInput <= 0) { showWarning('实效F数 F# 必须大于 0'); clearResults(); return; }
+    F = fnumberInput;
+    document.getElementById('fnumberSource').textContent = '(直接输入)';
+    document.getElementById('stepFExpr').textContent = 'F# = 直接输入';
+  } else {
+    if (!naInput || naInput <= 0) { showWarning('数值孔径 NA 必须大于 0'); clearResults(); return; }
+    if (naInput >= 1) { showWarning('物方 NA 通常小于 1，请检查输入'); }
+    F = M / (2 * naInput);
+    document.getElementById('fnumberSource').textContent = '(由 NA 换算)';
+    document.getElementById('stepFExpr').textContent = 'F# = M / (2×NA)';
+  }
+
+  hideWarning();
+
+  // δ = pixel size / magnification (convert μm → mm)
+  const p_mm = p_um / 1000;
+  const delta = p_mm / M;
+
+  // DOF = 2 * δ * F# / M^2
+  const dof = (2 * delta * F) / (M * M);
+
+  // Update display
+  document.getElementById('deltaVal').textContent = fmt(delta, 6);
+  document.getElementById('fnumberVal').textContent = fmt(F, 3);
+  document.getElementById('dofVal').textContent = fmt(dof, 5);
+  document.getElementById('dofSub').textContent =
+    `= 2 × ${fmt(delta, 5)} × ${fmt(F, 3)} / ${M}² = ${fmt(dof, 5)} mm`;
+
+  // Depth limits
+  const half = dof / 2;
+  document.getElementById('nearLimit').textContent = '−' + fmt(half, 5) + ' mm';
+  document.getElementById('farLimit').textContent = '+' + fmt(half, 5) + ' mm';
+
+  // Visual bar width (log scale for better visibility)
+  const barWidth = Math.min(90, Math.max(10, 20 + Math.log10(dof + 0.001) * 15));
+  document.getElementById('depthFill').style.width = barWidth + '%';
+
+  // Breakdown
+  document.getElementById('stepDelta').textContent = `${p_um}μm / ${M} = ${fmt(delta, 6)} mm`;
+  if (currentMode === 'fnumber') {
+    document.getElementById('stepF').textContent = F.toFixed(3);
+  } else {
+    document.getElementById('stepF').textContent = `${M} / (2×${naInput}) = ${fmt(F, 3)}`;
+  }
+  document.getElementById('stepDof').textContent = `2 × ${fmt(delta,5)} × ${fmt(F,3)} / ${M*M} = ${fmt(dof,5)} mm`;
+}
+
+function clearResults() {
+  ['deltaVal','fnumberVal','dofVal'].forEach(id => document.getElementById(id).textContent = '—');
+  document.getElementById('dofSub').textContent = '= 2 × δ × F# / M²';
+  document.getElementById('nearLimit').textContent = '—';
+  document.getElementById('farLimit').textContent = '—';
+  document.getElementById('stepDelta').textContent = '—';
+  document.getElementById('stepF').textContent = '—';
+  document.getElementById('stepDof').textContent = '—';
+}
+
+function loadPreset(name) {
+  if (name === 'vs-tch4') {
+    document.getElementById('magnification').value = 0.4;
+    document.getElementById('pixelSize').value = 3.45;
+    setMode('na');
+    document.getElementById('na').value = 0.05;
+  } else if (name === 'highmag') {
+    document.getElementById('magnification').value = 1.0;
+    document.getElementById('pixelSize').value = 3.45;
+    setMode('fnumber');
+    document.getElementById('fnumber').value = 8;
+  } else if (name === 'lowmag') {
+    document.getElementById('magnification').value = 0.1;
+    document.getElementById('pixelSize').value = 5.5;
+    setMode('fnumber');
+    document.getElementById('fnumber').value = 4;
+  }
+  calculate();
+}
+
+function resetAll() {
+  document.getElementById('magnification').value = 0.5;
+  document.getElementById('pixelSize').value = 3.45;
+  setMode('fnumber');
+  document.getElementById('fnumber').value = 8;
+  document.getElementById('na').value = 0.03;
+  calculate();
+}
+
+// Bind events
+['magnification','pixelSize','fnumber','na'].forEach(id => {
+  document.getElementById(id).addEventListener('input', calculate);
+});
+
+// Initial calc
+calculate();
+</script>
+</body>
+</html>
