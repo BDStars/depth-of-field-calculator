@@ -193,6 +193,23 @@
     color: var(--text-muted);
     pointer-events: none;
   }
+  .input-wrap select {
+    width: 100%;
+    padding: 11px 14px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+  }
+  .input-wrap select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+  }
 
   /* Mode toggle */
   .mode-toggle {
@@ -361,7 +378,7 @@
     transition: max-height 0.3s ease, margin-top 0.3s ease;
   }
   .breakdown.open .breakdown-body {
-    max-height: 300px;
+    max-height: 460px;
     margin-top: 12px;
   }
   .breakdown .step {
@@ -435,6 +452,29 @@
     gap: 8px;
   }
   .warn-banner.show { display: flex; }
+
+  /* Verdict block */
+  .verdict {
+    margin-top: 18px;
+    background: var(--bg-input);
+    border-radius: 8px;
+    padding: 14px 16px;
+    font-size: 12.5px;
+    line-height: 2;
+  }
+  .verdict .line { color: var(--text-secondary); }
+  .verdict .line .tag { font-weight: 700; margin-right: 6px; }
+  .verdict .line.ok .tag { color: #3ddc84; }
+  .verdict .line.ng .tag { color: #ff6b6b; }
+  .verdict .line.ok { color: var(--text-primary); }
+  .verdict .line.ng { color: #ffb3b3; }
+  .verdict .line.total {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    color: var(--text-primary);
+    font-weight: 600;
+  }
 </style>
 </head>
 <body>
@@ -444,17 +484,18 @@
   <div class="header">
     <div class="badge">LIQUID TELECENTRIC LENS</div>
     <h1>液态远心镜头 · 景深计算器</h1>
-    <p>基于物方容许弥散圆与实效F数的景深精确求解</p>
+    <p>几何项 + 衍射项分列，四档口径可选，物方微米直读</p>
   </div>
 
   <!-- Formula -->
   <div class="formula-bar">
     <div class="formula">
-      DOF = <span class="num">2</span> × δ × F<sub>#</sub> / M<sup>2</sup>
+      DOF = λ / (2NA<sup>2</sup>) + 2δ · F<sub>#</sub> / M
     </div>
     <div class="desc">
-      δ = 像素尺寸 / M　|　F<sub>#</sub> = M / (2 × NA)<br>
-      <span>DOF</span> 景深(mm) · <span>δ</span> 容许弥散圆(mm) · <span>F#</span> 实效F数 · <span>M</span> 放大倍率 · <span>NA</span> 物方数值孔径
+      δ = p / M（物方像元）　|　F<sub>#</sub> = M / (2 × NA)（实效F数）<br>
+      几何项 = 2δ·F<sub>#</sub> / M　·　衍射项 = λ / (2NA<sup>2</sup>)　·　合计按下方所选口径组合<br>
+      判定 σ = max（DOF/15，K·σ<sub>d</sub>/√N）　|　可分峰 h ≥ 2.5·DOF　|　量程 h ≤ T
     </div>
   </div>
 
@@ -474,7 +515,7 @@
             <span class="unit">×</span>
           </label>
           <div class="input-wrap">
-            <input type="number" id="magnification" value="0.5" step="0.01" min="0.001" placeholder="例如 0.5">
+            <input type="number" id="magnification" value="0.6" step="0.01" min="0.001" placeholder="例如 0.5">
           </div>
         </div>
 
@@ -484,7 +525,32 @@
             <span class="unit">μm</span>
           </label>
           <div class="input-wrap">
-            <input type="number" id="pixelSize" value="3.45" step="0.01" min="0.1" placeholder="例如 3.45">
+            <input type="number" id="pixelSize" value="4.8" step="0.01" min="0.1" placeholder="例如 3.45">
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label>
+            <span>波长 <span class="symbol">λ</span></span>
+            <span class="unit">μm</span>
+          </label>
+          <div class="input-wrap">
+            <input type="number" id="wavelength" value="0.55" step="0.01" min="0.2" max="1.5" placeholder="例如 0.55">
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label>
+            <span>景深口径（判据）</span>
+            <span class="unit">口径</span>
+          </label>
+          <div class="input-wrap">
+            <select id="criteria">
+              <option value="sum">几何＋衍射（相加，保守）</option>
+              <option value="rss">几何＋衍射（方和根）</option>
+              <option value="geo">几何·单像元判据</option>
+              <option value="rayleigh">Rayleigh 衍射极限 λ/NA²</option>
+            </select>
           </div>
         </div>
 
@@ -500,7 +566,7 @@
             <span class="unit">—</span>
           </label>
           <div class="input-wrap">
-            <input type="number" id="fnumber" value="8" step="0.1" min="0.1" placeholder="例如 8">
+            <input type="number" id="fnumber" value="4.5" step="0.1" min="0.1" placeholder="例如 8">
           </div>
         </div>
 
@@ -540,27 +606,39 @@
 
         <!-- Derived intermediate values -->
         <div class="derived-row">
-          <div class="label"><span class="sym">δ</span> 物方容许弥散圆</div>
-          <div class="value"><span id="deltaVal">—</span><span class="u">mm</span></div>
+          <div class="label"><span class="sym">δ</span> 物方像元（容许弥散圆）</div>
+          <div class="value"><span id="deltaVal">—</span><span class="u">μm</span></div>
+        </div>
+        <div class="derived-row">
+          <div class="label"><span class="sym">NA</span> 物方数值孔径</div>
+          <div class="value"><span id="naVal">—</span><span class="u">—</span></div>
         </div>
         <div class="derived-row">
           <div class="label"><span class="sym">F#</span> 实效F数 <span id="fnumberSource" style="font-size:10px;color:var(--text-muted);"></span></div>
           <div class="value"><span id="fnumberVal">—</span><span class="u">—</span></div>
         </div>
+        <div class="derived-row">
+          <div class="label">几何项　2δ·F<sub>#</sub>/M</div>
+          <div class="value"><span id="geoVal">—</span><span class="u">μm</span></div>
+        </div>
+        <div class="derived-row">
+          <div class="label">衍射项　λ/(2NA<sup>2</sup>)</div>
+          <div class="value"><span id="diffVal">—</span><span class="u">μm</span></div>
+        </div>
 
         <!-- Main result -->
         <div class="result-hero" style="margin-top:20px;">
-          <div class="label">设 备 真 实 有 效 景 深 · DOF</div>
-          <div class="value"><span id="dofVal">—</span><span class="u">mm</span></div>
-          <div class="sub" id="dofSub">= 2 × δ × F# / M²</div>
+          <div class="label">景 深 DOF（按所选口径）</div>
+          <div class="value"><span id="dofVal">—</span><span class="u">μm</span></div>
+          <div class="sub" id="dofSub">—</div>
         </div>
 
         <!-- Depth visualization -->
         <div class="depth-bar-wrap">
           <div class="bar-label">
-            <span>近景深边界 −DOF/2</span>
+            <span>近边界 −DOF/2</span>
             <span>对焦面</span>
-            <span>远景深边界 +DOF/2</span>
+            <span>远边界 +DOF/2</span>
           </div>
           <div class="depth-bar">
             <div class="fill" id="depthFill" style="width:60%;"></div>
@@ -571,6 +649,15 @@
             <span></span>
             <span id="farLimit">—</span>
           </div>
+        </div>
+
+        <div class="derived-row">
+          <div class="label">峰值定位精度　≈ DOF/15</div>
+          <div class="value"><span id="sigmaVal">—</span><span class="u">μm</span></div>
+        </div>
+        <div class="derived-row">
+          <div class="label">可测最小台阶　h ≥ 2.5·DOF</div>
+          <div class="value"><span id="hminVal">—</span><span class="u">μm</span></div>
         </div>
 
         <!-- Breakdown -->
@@ -589,7 +676,15 @@
               <span class="result" id="stepF">—</span>
             </div>
             <div class="step">
-              <span class="expr">DOF = 2 × δ × F# / M²</span>
+              <span class="expr">几何项 = 2δ·F# / M</span>
+              <span class="result" id="stepGeo">—</span>
+            </div>
+            <div class="step">
+              <span class="expr">衍射项 = λ / (2NA²)</span>
+              <span class="result" id="stepDiff">—</span>
+            </div>
+            <div class="step">
+              <span class="expr" id="stepExpr">合计（按所选口径）</span>
               <span class="result" id="stepDof">—</span>
             </div>
           </div>
@@ -600,10 +695,118 @@
 
   </div>
 
+  <!-- Liquid lens + verdict -->
+  <div class="main-grid" style="margin-top:24px;">
+
+    <div class="card">
+      <div class="card-header">
+        <div class="icon">🧪</div>
+        <h2>液态镜头与台阶参数</h2>
+      </div>
+      <div class="card-body">
+
+        <div class="input-group">
+          <label>
+            <span>屈光度行程 <span class="symbol">R</span></span>
+            <span class="unit">dpt</span>
+          </label>
+          <div class="input-wrap">
+            <input type="number" id="dptRange" value="5" step="0.1" min="0.1" placeholder="例如 5">
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label>
+            <span>光学杠杆 <span class="symbol">K</span></span>
+            <span class="unit">μm/dpt</span>
+          </label>
+          <div class="input-wrap">
+            <input type="number" id="leverage" value="3600" step="10" min="1" placeholder="厂家 Optical leverage：0.12 mm/dpt 填 120">
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label>
+            <span>屈光度重复性 <span class="symbol">σd</span></span>
+            <span class="unit">dpt</span>
+          </label>
+          <div class="input-wrap">
+            <input type="number" id="dptRepeat" value="0.02" step="0.005" min="0.001" placeholder="Class 1 = 0.02">
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label>
+            <span>参与拟合的测点数 <span class="symbol">N</span></span>
+            <span class="unit">点</span>
+          </label>
+          <div class="input-wrap">
+            <input type="number" id="avgN" value="10" step="1" min="1" placeholder="例如 10">
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label>
+            <span>被测台阶高度 <span class="symbol">h</span></span>
+            <span class="unit">μm</span>
+          </label>
+          <div class="input-wrap">
+            <input type="number" id="stepH" value="1000" step="1" min="0" placeholder="可留空">
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="icon">🎯</div>
+        <h2>最终判定</h2>
+      </div>
+      <div class="card-body">
+
+        <div class="derived-row">
+          <div class="label">量程　T = K·R</div>
+          <div class="value"><span id="travelVal">—</span><span class="u">μm</span></div>
+        </div>
+        <div class="derived-row">
+          <div class="label">液镜项　K·σd / √N</div>
+          <div class="value"><span id="lensVal">—</span><span class="u">μm</span></div>
+        </div>
+        <div class="derived-row">
+          <div class="label">光学项　DOF / 15</div>
+          <div class="value"><span id="optVal">—</span><span class="u">μm</span></div>
+        </div>
+        <div class="derived-row">
+          <div class="label">单点重复性（两者取大）</div>
+          <div class="value"><span id="sigmaJudge">—</span><span class="u">μm</span></div>
+        </div>
+
+        <div class="result-hero" style="margin-top:20px;">
+          <div class="label">测量示值误差理论极限</div>
+          <div class="value"><span id="sigmaFinal">—</span><span class="u">μm</span></div>
+          <div class="sub" id="sigmaSub">—</div>
+        </div>
+
+        <div class="verdict" id="verdict">
+          <div class="line" id="vPeak">—</div>
+          <div class="line" id="vRange">—</div>
+          <div class="line" id="vPrec">—</div>
+          <div class="line total" id="vTotal">—</div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
   <!-- Footer -->
   <div class="footer">
     <p>液态远心镜头景深计算工具 · 纯本地运行，无需联网 · 数据不上传</p>
-    <p class="note">※ 计算结果基于几何光学近似，实际景深受镜头像差、波长、对焦精度等因素影响，仅供工程参考</p>
+    <p class="note">※ 景深随口径不同，报数必须注明判据与波长；NA＜0.1 时衍射项占主导，不可只算几何项</p>
+    <p class="note">※ 判定取 σ = max(DOF/15, K·σd/√N)，N 为参与峰位拟合的帧数（单点取 1）；液镜项与光学项量级差 5 倍以上时以液镜项为准</p>
+    <p class="note">※ 光学杠杆 K 优先取厂家 datasheet 的 optical leverage（VS-TCH4-65-LQL1 为 0.12 mm/dpt）；TCH4 行程 T=K·R≈600 μm，测 1 mm 台阶需分段扫描或改用 Z 向滑台</p>
+    <p class="note">※ 最终以实测清晰度曲线半高宽为准，本工具用于选型初判（建议留 2～3 倍余量）</p>
   </div>
 
 </div>
@@ -645,79 +848,216 @@ function fmt(num, decimals) {
   return num.toFixed(8);
 }
 
+// 微米量展示：≥100 保留 1 位，≥10 保留 2 位，其余 3 位
+function fmtU(v) {
+  if (!isFinite(v)) return '—';
+  const abs = Math.abs(v);
+  if (abs >= 100) return v.toFixed(1);
+  if (abs >= 10) return v.toFixed(2);
+  return v.toFixed(3);
+}
+
 function calculate() {
   const M = parseFloat(document.getElementById('magnification').value);
   const p_um = parseFloat(document.getElementById('pixelSize').value); // μm
+  const lambda = parseFloat(document.getElementById('wavelength').value); // μm
   const fnumberInput = parseFloat(document.getElementById('fnumber').value);
   const naInput = parseFloat(document.getElementById('na').value);
+  const criteria = document.getElementById('criteria').value;
 
   // Validation
   if (!M || M <= 0) { showWarning('放大倍率 M 必须大于 0'); clearResults(); return; }
   if (!p_um || p_um <= 0) { showWarning('像素尺寸必须大于 0'); clearResults(); return; }
+  if (!lambda || lambda <= 0) { showWarning('波长 λ 必须大于 0'); clearResults(); return; }
 
-  let F;
+  let F, NA;
   if (currentMode === 'fnumber') {
     if (!fnumberInput || fnumberInput <= 0) { showWarning('实效F数 F# 必须大于 0'); clearResults(); return; }
     F = fnumberInput;
+    NA = M / (2 * F);
     document.getElementById('fnumberSource').textContent = '(直接输入)';
     document.getElementById('stepFExpr').textContent = 'F# = 直接输入';
   } else {
     if (!naInput || naInput <= 0) { showWarning('数值孔径 NA 必须大于 0'); clearResults(); return; }
     if (naInput >= 1) { showWarning('物方 NA 通常小于 1，请检查输入'); }
-    F = M / (2 * naInput);
+    NA = naInput;
+    F = M / (2 * NA);
     document.getElementById('fnumberSource').textContent = '(由 NA 换算)';
     document.getElementById('stepFExpr').textContent = 'F# = M / (2×NA)';
   }
 
   hideWarning();
 
-  // δ = pixel size / magnification (convert μm → mm)
-  const p_mm = p_um / 1000;
-  const delta = p_mm / M;
+  // 物方像元（容许弥散圆）
+  const delta = p_um / M;                 // μm
 
-  // DOF = 2 * δ * F# / M^2
-  const dof = (2 * delta * F) / (M * M);
+  // 几何项 = 2δ·F#/M
+  const geo = 2 * delta * F / M;          // μm
+
+  // 衍射项 = λ/(2NA²)
+  const diff = lambda / (2 * NA * NA);    // μm
+
+  // 按所选口径组合
+  let dof = geo, label = '几何·单像元判据', expr = '2δ·F#/M';
+  if (criteria === 'sum') {
+    dof = geo + diff;
+    label = '几何＋衍射（相加，保守）';
+    expr = '2δ·F#/M + λ/(2NA²)';
+  } else if (criteria === 'rss') {
+    dof = Math.sqrt(geo * geo + diff * diff);
+    label = '几何＋衍射（方和根）';
+    expr = '√[(2δ·F#/M)² + (λ/(2NA²))²]';
+  } else if (criteria === 'rayleigh') {
+    dof = 2 * diff;
+    label = 'Rayleigh 衍射极限（λ/NA²）';
+    expr = 'λ/NA²';
+  }
 
   // Update display
-  document.getElementById('deltaVal').textContent = fmt(delta, 6);
-  document.getElementById('fnumberVal').textContent = fmt(F, 3);
-  document.getElementById('dofVal').textContent = fmt(dof, 5);
-  document.getElementById('dofSub').textContent =
-    `= 2 × ${fmt(delta, 5)} × ${fmt(F, 3)} / ${M}² = ${fmt(dof, 5)} mm`;
+  document.getElementById('deltaVal').textContent = fmtU(delta);
+  document.getElementById('naVal').textContent = NA.toFixed(4);
+  document.getElementById('fnumberVal').textContent = F.toFixed(2);
+  document.getElementById('geoVal').textContent = fmtU(geo);
+  document.getElementById('diffVal').textContent = fmtU(diff);
+  document.getElementById('dofVal').textContent = fmtU(dof);
+  document.getElementById('dofSub').textContent = label + '：' + expr + ' = ' + fmtU(dof) + ' μm';
 
   // Depth limits
-  const half = dof / 2;
-  document.getElementById('nearLimit').textContent = '−' + fmt(half, 5) + ' mm';
-  document.getElementById('farLimit').textContent = '+' + fmt(half, 5) + ' mm';
+  document.getElementById('nearLimit').textContent = '−' + fmtU(dof / 2) + ' μm';
+  document.getElementById('farLimit').textContent = '+' + fmtU(dof / 2) + ' μm';
+  document.getElementById('sigmaVal').textContent = fmtU(dof / 15);
+  document.getElementById('hminVal').textContent = fmtU(2.5 * dof);
 
   // Visual bar width (log scale for better visibility)
-  const barWidth = Math.min(90, Math.max(10, 20 + Math.log10(dof + 0.001) * 15));
+  const barWidth = Math.min(90, Math.max(10, 25 + Math.log10(dof + 0.01) * 12));
   document.getElementById('depthFill').style.width = barWidth + '%';
 
   // Breakdown
-  document.getElementById('stepDelta').textContent = `${p_um}μm / ${M} = ${fmt(delta, 6)} mm`;
-  if (currentMode === 'fnumber') {
-    document.getElementById('stepF').textContent = F.toFixed(3);
-  } else {
-    document.getElementById('stepF').textContent = `${M} / (2×${naInput}) = ${fmt(F, 3)}`;
+  document.getElementById('stepDelta').textContent = `${p_um} μm / ${M} = ${fmtU(delta)} μm`;
+  document.getElementById('stepF').textContent = (currentMode === 'fnumber')
+    ? F.toFixed(2)
+    : `${M} / (2×${naInput}) = ${F.toFixed(2)}`;
+  document.getElementById('stepGeo').textContent = `2 × ${fmtU(delta)} × ${F.toFixed(2)} / ${M} = ${fmtU(geo)} μm`;
+  document.getElementById('stepDiff').textContent = `${lambda} / (2 × ${NA.toFixed(4)}²) = ${fmtU(diff)} μm`;
+  document.getElementById('stepExpr').textContent = '合计（' + label + '）';
+  document.getElementById('stepDof').textContent = fmtU(dof) + ' μm';
+
+  updateJudge(dof);
+}
+
+// 液态镜头与台阶判定：σ = max(DOF/15, K·σd/√N)
+function updateJudge(dof) {
+  const R = parseFloat(document.getElementById('dptRange').value);
+  const K = parseFloat(document.getElementById('leverage').value);
+  const T = K * R;
+  const sd = parseFloat(document.getElementById('dptRepeat').value);
+  let N = parseFloat(document.getElementById('avgN').value);
+  const h = parseFloat(document.getElementById('stepH').value);
+
+  const setTxt = (id, v) => document.getElementById(id).textContent = v;
+  const fmtJ = v => v >= 10 ? v.toFixed(1) : fmtU(v);
+  const blank = ['travelVal', 'lensVal', 'optVal', 'sigmaJudge', 'sigmaFinal'];
+
+  if (!R || R <= 0 || !K || K <= 0 || !sd || sd <= 0 || !isFinite(dof)) {
+    blank.forEach(id => setTxt(id, '—'));
+    setTxt('sigmaSub', '—');
+    ['vPeak', 'vRange', 'vPrec', 'vTotal'].forEach(id => {
+      const el = document.getElementById(id);
+      el.className = id === 'vTotal' ? 'line total' : 'line';
+      el.textContent = '—';
+    });
+    return;
   }
-  document.getElementById('stepDof').textContent = `2 × ${fmt(delta,5)} × ${fmt(F,3)} / ${M*M} = ${fmt(dof,5)} mm`;
+
+  if (!isFinite(N) || N < 1) N = 1;
+
+  const lens = K * sd / Math.sqrt(N);  // μm
+  const opt = dof / 15;                // μm
+  const sigma = Math.max(lens, opt);   // μm
+  const hmin = 2.5 * dof;              // μm
+  const hasH = isFinite(h) && h > 0;
+
+  setTxt('travelVal', String(Math.round(T)));
+  setTxt('lensVal', fmtJ(lens));
+  setTxt('optVal', fmtJ(opt));
+  setTxt('sigmaJudge', fmtJ(sigma));
+  setTxt('sigmaFinal', fmtJ(sigma));
+  setTxt('sigmaSub',
+    `液镜项 ${fmtJ(lens)} μm（σd=${sd} dpt，N=${N}）· 光学项 ${fmtJ(opt)} μm → 取 ${fmtJ(sigma)} μm`);
+
+  const vPeak = document.getElementById('vPeak');
+  const vRange = document.getElementById('vRange');
+  const vPrec = document.getElementById('vPrec');
+  const vTotal = document.getElementById('vTotal');
+
+  let peakOK = true, rangeOK = true;
+
+  if (hasH) {
+    peakOK = h >= hmin;
+    vPeak.className = 'line ' + (peakOK ? 'ok' : 'ng');
+    vPeak.innerHTML = `<span class="tag">${peakOK ? '✓' : '✕'}</span>` +
+      `可分峰：h = ${h} μm ${peakOK ? '≥' : '＜'} 2.5·DOF = ${fmtJ(hmin)} μm（相当于 ${(h / dof).toFixed(1)}×DOF）`;
+
+    rangeOK = h <= T;
+    vRange.className = 'line ' + (rangeOK ? 'ok' : 'ng');
+    vRange.innerHTML = `<span class="tag">${rangeOK ? '✓' : '✕'}</span>` +
+      `量程：h = ${h} μm ${rangeOK ? '≤' : '＞'} T = ${T} μm，占行程 ${(h / T * 100).toFixed(1)}%`;
+  } else {
+    vPeak.className = 'line';
+    vPeak.innerHTML = `<span class="tag">·</span>可分峰下限：h ≥ 2.5·DOF = ${fmtU(hmin)} μm`;
+    vRange.className = 'line';
+    vRange.innerHTML = `<span class="tag">·</span>量程上限：h ≤ T = ${T} μm`;
+  }
+
+  vPrec.className = 'line';
+  vPrec.innerHTML = `<span class="tag">·</span>` +
+    `示值误差：σ = ${fmtJ(sigma)} μm（${lens > opt ? '液镜项主导' : '光学项主导'}）` +
+    (hasH ? `，占台阶 ${(sigma / h * 100).toFixed(1)}%` : '');
+
+  const okAll = peakOK && rangeOK;
+  if (!hasH) {
+    vTotal.className = 'line total';
+    vTotal.innerHTML = `<span class="tag">·</span>` +
+      `结论：未输入台阶高度，仅给出能力边界（可分峰下限 ${fmtJ(hmin)} μm，量程 ${T} μm）`;
+  } else if (okAll) {
+    vTotal.className = 'line total ok';
+    vTotal.innerHTML = `<span class="tag">✓</span>` +
+      `结论：可测。理论示值误差极限约 ±${fmtJ(sigma)} μm（不含标准件偏差与温漂）`;
+  } else {
+    vTotal.className = 'line total ng';
+    vTotal.innerHTML = `<span class="tag">✕</span>` +
+      `结论：不可测。${peakOK ? '' : '台阶低于可分峰下限；'}${rangeOK ? '' : '台阶超出液态镜头行程，需分段扫描'}`;
+  }
 }
 
 function clearResults() {
-  ['deltaVal','fnumberVal','dofVal'].forEach(id => document.getElementById(id).textContent = '—');
-  document.getElementById('dofSub').textContent = '= 2 × δ × F# / M²';
+  ['deltaVal','naVal','fnumberVal','geoVal','diffVal','dofVal','sigmaVal','hminVal','travelVal','lensVal','optVal','sigmaJudge','sigmaFinal'].forEach(
+    id => document.getElementById(id).textContent = '—'
+  );
+  document.getElementById('dofSub').textContent = '—';
+  document.getElementById('sigmaSub').textContent = '—';
+  ['vPeak','vRange','vPrec'].forEach(id => {
+    const el = document.getElementById(id);
+    el.className = 'line';
+    el.textContent = '—';
+  });
+  document.getElementById('vTotal').className = 'line total';
+  document.getElementById('vTotal').textContent = '—';
   document.getElementById('nearLimit').textContent = '—';
   document.getElementById('farLimit').textContent = '—';
   document.getElementById('stepDelta').textContent = '—';
   document.getElementById('stepF').textContent = '—';
+  document.getElementById('stepGeo').textContent = '—';
+  document.getElementById('stepDiff').textContent = '—';
   document.getElementById('stepDof').textContent = '—';
 }
 
 const PRESETS = {
-  'tch4-near': { M: 4,    p: 4.8, F: 18.1 },
-  'tch4-far':  { M: 3.69, p: 4.8, F: 16.8 },
-  'tcalp':     { M: 0.6,  p: 4.8, F: 4.5  }
+  // VS-TCH4-65-LQL1 datasheet：optical leverage 0.12 mm/dpt，5 dpt 行程约 0.6 mm
+  'tch4-near': { M: 4.00, p: 4.8, F: 18.1, R: 5, K: 120,  sd: 0.02 },
+  'tch4-far':  { M: 3.69, p: 4.8, F: 16.8, R: 5, K: 120,  sd: 0.02 },
+  // TCALP23-06：厂家未给 leverage，按工作距 113～131 mm / 5 dpt 反推，属估算
+  'tcalp':     { M: 0.6,  p: 4.8, F: 4.5,  R: 5, K: 3600, sd: 0.02 }
 };
 
 function loadPreset(name) {
@@ -725,23 +1065,36 @@ function loadPreset(name) {
   if (!preset) return;
   document.getElementById('magnification').value = preset.M;
   document.getElementById('pixelSize').value = preset.p;
+  document.getElementById('wavelength').value = 0.55;
   document.getElementById('fnumber').value = preset.F;
+  document.getElementById('criteria').value = 'sum';
+  if (preset.R) document.getElementById('dptRange').value = preset.R;
+  if (preset.K) document.getElementById('leverage').value = preset.K;
+  if (preset.sd) document.getElementById('dptRepeat').value = preset.sd;
   setMode('fnumber');
 }
 
 function resetAll() {
   document.getElementById('magnification').value = 0.5;
   document.getElementById('pixelSize').value = 3.45;
+  document.getElementById('wavelength').value = 0.55;
+  document.getElementById('criteria').value = 'sum';
   setMode('fnumber');
   document.getElementById('fnumber').value = 8;
   document.getElementById('na').value = 0.03;
+  document.getElementById('dptRange').value = 5;
+  document.getElementById('leverage').value = 3600;
+  document.getElementById('dptRepeat').value = 0.02;
+  document.getElementById('avgN').value = 10;
+  document.getElementById('stepH').value = 1000;
   calculate();
 }
 
 // Bind events
-['magnification','pixelSize','fnumber','na'].forEach(id => {
+['magnification','pixelSize','wavelength','fnumber','na','dptRange','leverage','dptRepeat','avgN','stepH'].forEach(id => {
   document.getElementById(id).addEventListener('input', calculate);
 });
+document.getElementById('criteria').addEventListener('change', calculate);
 
 // Initial calc
 calculate();
