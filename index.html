@@ -521,9 +521,9 @@
 
         <!-- Presets -->
         <div class="preset-row">
-          <button class="preset-btn" onclick="loadPreset('vs-tch4')">VS-TCH4-65 参考</button>
-          <button class="preset-btn" onclick="loadPreset('highmag')">高倍率 1×</button>
-          <button class="preset-btn" onclick="loadPreset('lowmag')">低倍率 0.1×</button>
+          <button class="preset-btn" onclick="loadPreset('tch4-near')">VS-TCH4-65-LQL1-近</button>
+          <button class="preset-btn" onclick="loadPreset('tch4-far')">VS-TCH4-65-LQL1-远</button>
+          <button class="preset-btn" onclick="loadPreset('tcalp')">TCALP23-06-115-12EC1</button>
           <button class="preset-btn" onclick="resetAll()">重置</button>
         </div>
 
@@ -714,24 +714,19 @@ function clearResults() {
   document.getElementById('stepDof').textContent = '—';
 }
 
+const PRESETS = {
+  'tch4-near': { M: 4,    p: 4.8, F: 18.1 },
+  'tch4-far':  { M: 3.69, p: 4.8, F: 16.8 },
+  'tcalp':     { M: 0.6,  p: 4.8, F: 4.5  }
+};
+
 function loadPreset(name) {
-  if (name === 'vs-tch4') {
-    document.getElementById('magnification').value = 0.4;
-    document.getElementById('pixelSize').value = 3.45;
-    setMode('na');
-    document.getElementById('na').value = 0.05;
-  } else if (name === 'highmag') {
-    document.getElementById('magnification').value = 1.0;
-    document.getElementById('pixelSize').value = 3.45;
-    setMode('fnumber');
-    document.getElementById('fnumber').value = 8;
-  } else if (name === 'lowmag') {
-    document.getElementById('magnification').value = 0.1;
-    document.getElementById('pixelSize').value = 5.5;
-    setMode('fnumber');
-    document.getElementById('fnumber').value = 4;
-  }
-  calculate();
+  const preset = PRESETS[name];
+  if (!preset) return;
+  document.getElementById('magnification').value = preset.M;
+  document.getElementById('pixelSize').value = preset.p;
+  document.getElementById('fnumber').value = preset.F;
+  setMode('fnumber');
 }
 
 function resetAll() {
